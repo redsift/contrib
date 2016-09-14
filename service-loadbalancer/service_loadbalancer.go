@@ -140,6 +140,8 @@ var (
 
 	lbDefAlgorithm = flags.String("balance-algorithm", "roundrobin", `if set, it allows a custom
                 default balance algorithm.`)
+
+	previousServices = ""
 )
 
 // service encapsulates a single backend entry in the load balancer config.
@@ -494,7 +496,7 @@ func (lbc *loadBalancerController) getServices() (httpSvc []service, httpsTermSv
 					httpSvc = append(httpSvc, newSvc)
 				}
 			}
-			glog.Infof("Found service: %+v", newSvc)
+			//glog.Infof("Found service: %+v", newSvc)
 		}
 	}
 
@@ -526,7 +528,14 @@ func (lbc *loadBalancerController) sync(dryRun bool) error {
 	if dryRun {
 		return nil
 	}
-	return lbc.cfg.reload()
+
+	newServices := fmt.Sprintf("%v", httpsTermSvc)
+	fmt.Println("newServices: ", newServices)
+	if previousServices != newServices {
+		previousServices = newServices
+		return lbc.cfg.reload()
+	}
+	return nil
 }
 
 // worker handles the work queue.
