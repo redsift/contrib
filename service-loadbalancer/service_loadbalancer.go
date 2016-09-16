@@ -530,8 +530,9 @@ func (lbc *loadBalancerController) sync(dryRun bool) error {
 	}
 
 	newServices := fmt.Sprintf("%v", httpsTermSvc)
-	fmt.Println("newServices: ", newServices)
+	//fmt.Println("newServices: ", newServices)
 	if previousServices != newServices {
+		glog.Infof("Service list needs reload")
 		previousServices = newServices
 		return lbc.cfg.reload()
 	}
