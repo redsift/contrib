@@ -34,7 +34,6 @@ import (
 	"bytes"
 
 	"github.com/golang/glog"
-	"github.com/redsift/inbox/dumper"
 	flag "github.com/spf13/pflag"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/client/cache"
@@ -216,7 +215,7 @@ type loadBalancerConfig struct {
 	sslCaCert      string `json:"sslCaCert" description:"PEM to verify client's certificate."`
 	lbDefAlgorithm string `description:"custom default load balancer algorithm".`
 
-	dumper *dumper.RollingDumper
+	dumper *RollingDumper
 }
 
 type staticPageHandler struct {
@@ -368,9 +367,9 @@ type loadBalancerController struct {
 	httpPort          int
 
 	previousServices string
-	httpSvcDumper    *dumper.RollingDumper
-	termSvcDumper    *dumper.RollingDumper
-	tcpSvcDumper     *dumper.RollingDumper
+	httpSvcDumper    *RollingDumper
+	termSvcDumper    *RollingDumper
+	tcpSvcDumper     *RollingDumper
 }
 
 // getTargetPort returns the numeric value of TargetPort
@@ -590,9 +589,9 @@ func newLoadBalancerController(cfg *loadBalancerConfig, kubeClient *unversioned.
 		forwardServices: *forwardServices,
 		httpPort:        *httpPort,
 		tcpServices:     tcpServices,
-		httpSvcDumper:   dumper.NewRollingDumper("httpSvc", 1000),
-		termSvcDumper:   dumper.NewRollingDumper("termSvc", 1000),
-		tcpSvcDumper:    dumper.NewRollingDumper("tcpSvc", 1000),
+		httpSvcDumper:   NewRollingDumper("httpSvc", 1000),
+		termSvcDumper:   NewRollingDumper("termSvc", 1000),
+		tcpSvcDumper:    NewRollingDumper("tcpSvc", 1000),
 	}
 
 	enqueue := func(obj interface{}) {
@@ -709,7 +708,7 @@ func main() {
 	clientConfig := kubectl_util.DefaultClientConfig(flags)
 	flags.Parse(os.Args)
 	cfg := parseCfg(*config, *lbDefAlgorithm, *sslCert, *sslCaCert)
-	cfg.dumper = dumper.NewRollingDumper("cfg", 1000)
+	cfg.dumper = NewRollingDumper("cfg", 1000)
 
 	var kubeClient *unversioned.Client
 	var err error
