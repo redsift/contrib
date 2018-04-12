@@ -558,21 +558,21 @@ func (lbc *loadBalancerController) sync(dryRun bool) error {
 	if len(httpSvc) == 0 && len(httpsTermSvc) == 0 && len(tcpSvc) == 0 {
 		return nil
 	}
-	if err := lbc.cfg.write(
-		map[string][]service{
-			"http":      httpSvc,
-			"httpsTerm": httpsTermSvc,
-			"tcp":       tcpSvc,
-		}, dryRun); err != nil {
-		return err
-	}
-	if dryRun {
-		return nil
-	}
-
 	newServices := fmt.Sprintf("%v", httpsTermSvc)
 	//fmt.Println("newServices: ", newServices)
 	if lbc.previousServices != newServices {
+		if err := lbc.cfg.write(
+			map[string][]service{
+				"http":      httpSvc,
+				"httpsTerm": httpsTermSvc,
+				"tcp":       tcpSvc,
+			}, dryRun); err != nil {
+			return err
+		}
+		if dryRun {
+			return nil
+		}
+
 		lbc.dump(httpSvc, httpsTermSvc, tcpSvc)
 		glog.Infof("Service list needs reload")
 		lbc.previousServices = newServices
