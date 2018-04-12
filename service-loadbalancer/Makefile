@@ -5,7 +5,7 @@ TAG ?= 0.4
 PREFIX ?= gcr.io/google_containers/servicelb
 GCLOUD ?= gcloud
 HAPROXY_IMAGE = contrib-haproxy
-SRC = service_loadbalancer.go loadbalancer_log.go
+SRC = service_loadbalancer.go loadbalancer_log.go dumper.go
 
 service_loadbalancer: $(SRC)
 	CGO_ENABLED=0 GOOS=linux godep go build -a -installsuffix cgo -ldflags '-w' -o $@ $(SRC)
