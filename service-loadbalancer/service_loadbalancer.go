@@ -521,6 +521,7 @@ func (lbc *loadBalancerController) getServices() (httpSvc []service, httpsTermSv
 		}
 	}
 	if !syncFound {
+		glog.Infof("MK-ALERT: sync service missing. substituted by sync:8358. What the hell k8s!?!")
 		// inject service endpoint sync:8358
 		httpsTermSvc = append(httpsTermSvc, service{
 			Name:        "sync",
