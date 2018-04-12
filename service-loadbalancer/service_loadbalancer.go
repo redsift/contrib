@@ -31,7 +31,10 @@ import (
 	"text/template"
 	"time"
 
+	"bytes"
+
 	"github.com/golang/glog"
+	"github.com/redsift/inbox/dumper"
 	flag "github.com/spf13/pflag"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/client/cache"
@@ -140,8 +143,6 @@ var (
 
 	lbDefAlgorithm = flags.String("balance-algorithm", "roundrobin", `if set, it allows a custom
                 default balance algorithm.`)
-
-	previousServices = ""
 )
 
 // service encapsulates a single backend entry in the load balancer config.
@@ -214,6 +215,8 @@ type loadBalancerConfig struct {
 	sslCert        string `json:"sslCert" description:"PEM for ssl."`
 	sslCaCert      string `json:"sslCaCert" description:"PEM to verify client's certificate."`
 	lbDefAlgorithm string `description:"custom default load balancer algorithm".`
+
+	dumper *dumper.RollingDumper
 }
 
 type staticPageHandler struct {
@@ -293,13 +296,11 @@ func (s *staticPageHandler) loadUrl(url string) error {
 // write writes the configuration file, will write to stdout if dryRun == true
 func (cfg *loadBalancerConfig) write(services map[string][]service, dryRun bool) (err error) {
 	var w io.Writer
+	buf := new(bytes.Buffer)
 	if dryRun {
 		w = os.Stdout
 	} else {
-		w, err = os.Create(cfg.Config)
-		if err != nil {
-			return
-		}
+		w = buf
 	}
 	var t *template.Template
 	t, err = template.ParseFiles(cfg.Template)
@@ -327,7 +328,15 @@ func (cfg *loadBalancerConfig) write(services map[string][]service, dryRun bool)
 	}
 
 	err = t.Execute(w, conf)
-	return
+	if err != nil {
+		return
+	}
+
+	b := buf.Bytes()
+
+	cfg.dumper.Dump(b)
+
+	return ioutil.WriteFile(cfg.Config, b, 0644)
 }
 
 // reload reloads the loadbalancer using the reload cmd specified in the json manifest.
@@ -357,6 +366,11 @@ type loadBalancerController struct {
 	forwardServices   bool
 	tcpServices       map[string]int
 	httpPort          int
+
+	previousServices string
+	httpSvcDumper    *dumper.RollingDumper
+	termSvcDumper    *dumper.RollingDumper
+	tcpSvcDumper     *dumper.RollingDumper
 }
 
 // getTargetPort returns the numeric value of TargetPort
@@ -507,6 +521,17 @@ func (lbc *loadBalancerController) getServices() (httpSvc []service, httpsTermSv
 	return
 }
 
+func dump(v interface{}) []byte {
+	b, _ := json.Marshal(v)
+	return b
+}
+
+func (lbc *loadBalancerController) dump(httpSvc []service, httpsTermSvc []service, tcpSvc []service) {
+	lbc.httpSvcDumper.Dump(dump(httpSvc))
+	lbc.termSvcDumper.Dump(dump(httpsTermSvc))
+	lbc.tcpSvcDumper.Dump(dump(tcpSvc))
+}
+
 // sync all services with the loadbalancer.
 func (lbc *loadBalancerController) sync(dryRun bool) error {
 	if !lbc.epController.HasSynced() || !lbc.svcController.HasSynced() {
@@ -531,9 +556,10 @@ func (lbc *loadBalancerController) sync(dryRun bool) error {
 
 	newServices := fmt.Sprintf("%v", httpsTermSvc)
 	//fmt.Println("newServices: ", newServices)
-	if previousServices != newServices {
+	if lbc.previousServices != newServices {
+		lbc.dump(httpSvc, httpsTermSvc, tcpSvc)
 		glog.Infof("Service list needs reload")
-		previousServices = newServices
+		lbc.previousServices = newServices
 		return lbc.cfg.reload()
 	}
 	return nil
@@ -564,6 +590,9 @@ func newLoadBalancerController(cfg *loadBalancerConfig, kubeClient *unversioned.
 		forwardServices: *forwardServices,
 		httpPort:        *httpPort,
 		tcpServices:     tcpServices,
+		httpSvcDumper:   dumper.NewRollingDumper("httpSvc", 1000),
+		termSvcDumper:   dumper.NewRollingDumper("termSvc", 1000),
+		tcpSvcDumper:    dumper.NewRollingDumper("tcpSvc", 1000),
 	}
 
 	enqueue := func(obj interface{}) {
@@ -680,6 +709,7 @@ func main() {
 	clientConfig := kubectl_util.DefaultClientConfig(flags)
 	flags.Parse(os.Args)
 	cfg := parseCfg(*config, *lbDefAlgorithm, *sslCert, *sslCaCert)
+	cfg.dumper = dumper.NewRollingDumper("cfg", 1000)
 
 	var kubeClient *unversioned.Client
 	var err error
