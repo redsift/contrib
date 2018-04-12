@@ -513,6 +513,22 @@ func (lbc *loadBalancerController) getServices() (httpSvc []service, httpsTermSv
 		}
 	}
 
+	syncFound := false
+	for _, svc := range httpsTermSvc {
+		if svc.Name == "sync" {
+			syncFound = true
+			break
+		}
+	}
+	if !syncFound {
+		// inject service endpoint sync:8358
+		httpsTermSvc = append(httpsTermSvc, service{
+			Name:        "sync",
+			Ep:          []string{"sync:8358"},
+			BackendPort: 8358,
+		})
+	}
+
 	sort.Sort(serviceByName(httpSvc))
 	sort.Sort(serviceByName(httpsTermSvc))
 	sort.Sort(serviceByName(tcpSvc))
